@@ -1,0 +1,184 @@
+#include <iostream>
+#include <queue>
+#include <random>
+#include <time.h>
+
+using namespace std;
+
+#define length 4
+#define avg_pkt_length 8000
+
+class bit {
+	private:
+		int bit_id;
+		int gen_time;
+		int pkt_id;
+		bool end;
+	public:
+		bit(int id, int timeslot, int pkt_num, bool e) {
+			bit_id = id;
+			gen_time = timeslot;
+			pkt_id = pkt_num;
+			end = e;
+		}
+		bit(bit* bt) {
+			bit_id = bt->getBitId();
+			gen_time = bt->getTime();
+			pkt_id = bt->getPktId();
+			end = bt->end;
+		}
+		int getBitId() {
+			return bit_id;
+		}
+		int getTime() {
+			return gen_time;
+		}
+		int getPktId() {
+			return pkt_id;
+		}
+		bool isEnd() {
+			return end;
+		}
+};
+
+class node {
+	private:
+		int id;
+		node* next;
+		queue<bit*> q;
+	public:
+		node() {}
+		node(int num) {
+			id = num;
+			next = NULL;
+		}
+		void setNext(node* n) { 
+			next = n;
+		}
+		node* getNext() {
+			return next;
+		}
+		void GenPacket(int timeslot, int pkt_num, int pkt_length) {
+			bool end = false;
+			for(int i=0; i<pkt_length; i++) {
+				if(i == pkt_length - 1)
+					end = true;
+				bit* tp = new bit(i, timeslot, pkt_num, end);
+				q.push(tp);
+			}
+		}
+		bool isEmpty() {
+			return q.empty();	//return true if the queue is empty
+		}
+		bit* getFirst() {
+			return q.front();
+		}
+		bit* getLast() {
+			return q.back();
+		}
+		void popBit() {
+			q.pop();
+		}
+		void addBit(bit* tb) {
+			q.push(tb);
+		}
+};
+
+void transmit(node* transmitter, node* receiver) {
+	if(!transmitter->isEmpty()) {
+		bit* tb = new bit(transmitter->getFirst());
+		transmitter->popBit();
+		receiver->addBit(tb);
+	}
+}
+
+int main(int argc, char* argv[]) {	// timeslot - arrival rate
+
+	//Linear Topology
+	node* NodeContainer[length];
+	for(int i=0; i<length; i++) {
+		node* tn = new node(i);
+		NodeContainer[i] = tn;
+	}
+	for(int i=1; i<length-1; i++) {
+		NodeContainer[i]->setNext(NodeContainer[i+1]);
+	}
+	NodeContainer[0]->setNext(NodeContainer[2]);
+
+	default_random_engine generator;
+	exponential_distribution<double> distribution(1.0/avg_pkt_length);
+	srand(time(NULL));
+	int timeslot = 0;
+	int max_timeslot = atoi(argv[1]);
+	int pkt_num = 0;
+	double arrival_rate = atof(argv[2]);
+	bool tc[length];
+	bool transmitting[length];
+	for(int i=0; i<length; i++) {
+		tc[i] = false;
+		transmitting[i] = false;
+	}
+	while(timeslot < max_timeslot) {
+		long ran_num = (rand() % 10000) * 10000 + (rand() % 10000);
+		if(ran_num < arrival_rate * 100.0 / avg_pkt_length * 1000000.0) {
+			double temp = distribution(generator);
+			int pkt_length = int(temp);
+			while(pkt_length < 80) {
+				temp = distribution(generator);
+				pkt_length = int(temp);
+			}
+			NodeContainer[0]->GenPacket(timeslot, pkt_num, pkt_length);
+			pkt_num++;
+		}
+		ran_num = (rand() % 10000) * 10000 + (rand() % 10000);
+		if(ran_num < arrival_rate * 100.0 / avg_pkt_length * 1000000.0) {
+			double temp = avg_pkt_length * distribution(generator);
+			int pkt_length = int(temp);
+			while(pkt_length < 80) {
+				temp = avg_pkt_length * distribution(generator);
+				pkt_length = int(temp);
+			}
+			NodeContainer[1]->GenPacket(timeslot, pkt_num, pkt_length);
+			pkt_num++;
+		}
+
+		for(int i=0; i<length-1; i++) {
+			if(!tc[i] && !(NodeContainer[i]->isEmpty())) {
+				if(NodeContainer[i]->getLast()->isEnd())
+					tc[i] = true;
+			}
+		}
+		if(!tc[length-1] && !(NodeContainer[length-1]->isEmpty())) {
+			tc[length-1] = true;
+		}
+		for(int i=0; i<length-1; i++) {
+			if(tc[i]) {
+				if((i == 0 && transmitting[1] == false) || (i == 1 && transmitting[0] == false)) {
+					transmitting[i] = true;
+					transmit(NodeContainer[i], NodeContainer[i]->getNext());
+					if(NodeContainer[i]->getNext()->getLast()->isEnd()) {
+						tc[i] = false;
+						transmitting[i] = false;
+					}
+				} else {
+					transmit(NodeContainer[i], NodeContainer[i]->getNext());
+					if(NodeContainer[i]->getNext()->getLast()->isEnd()) {
+						tc[i] = false;
+						transmitting[i] = false;
+					}
+				}
+			}
+		}
+		if(tc[length-1]) {
+			bit* pb = NodeContainer[length-1]->getFirst();
+			if(pb->isEnd()) {
+//				cout << "Packet " << pb->getPktId() << " : " << timeslot - pb->getTime() << endl;
+				cout << timeslot - pb->getTime() << endl;
+				tc[length-1] = false;
+			}
+			NodeContainer[length-1]->popBit();
+		}
+
+		timeslot++;
+	}
+}
