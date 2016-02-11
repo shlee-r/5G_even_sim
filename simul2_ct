@@ -5,7 +5,7 @@
 
 using namespace std;
 
-#define length 4
+#define length 5
 #define avg_pkt_length 8000
 
 class bit {
