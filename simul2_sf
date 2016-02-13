@@ -1,190 +1,284 @@
-// #include <iostream>
-// #include <queue>
-// //#include <deque>
-// #include <random>
-// #include <time.h>
+ #include <iostream>
+ #include <queue>
+ //#include <deque>
+ #include <random>
+ #include <time.h>
 
-// using namespace std;
+ using namespace std;
 
-// #define length 3
-// #define avg_pkt_length 8000
+ #define MAXNODE 2
+ //#define AVGPKTLENGTH 8000	// in slots
+ #define AVGPKTLENGTH 1000	// in slots
+ #define FRAME AVGPKTLENGTH
+ #define MINPKTLENGTH 0 // in slots
 
-// class bit {
-// 	private:
-// 		int bit_id;
-// 		int gen_time;
-// 		int pkt_id;
-// 		bool end;
-// 	public:
-// 		bit(int id, int timeslot, int pkt_num, bool e) {
-// 			bit_id = id;
-// 			gen_time = timeslot;
-// 			pkt_id = pkt_num;
-// 			end = e;
-// 		}
-// 		bit(bit* bt) {
-// 			bit_id = bt->getBitId();
-// 			gen_time = bt->getTime();
-// 			pkt_id = bt->getPktId();
-// 			end = bt->end;
-// 		}
-// 		int getBitId() {
-// 			return bit_id;
-// 		}
-// 		int getTime() {
-// 			return gen_time;
-// 		}
-// 		int getPktId() {
-// 			return pkt_id;
-// 		}
-// 		bool isEnd() {
-// 			return end;
-// 		}
-// };
+ class bit {
+ 	private:
+ 		int bit_id;
+ 		int gen_time;
+ 		int pkt_id;
+ 		bool end;
+ 	public:
+ 		bit(int id, int timeslot, int pktSeq, bool e) {
+ 			bit_id = id;
+ 			gen_time = timeslot;
+ 			pkt_id = pktSeq;
+ 			end = e;
+ 		}
+ 		bit(bit* bt) {
+ 			bit_id = bt->getBitId();
+ 			gen_time = bt->getCreateTime();
+ 			pkt_id = bt->getPktId();
+ 			end = bt->end;
+ 		}
+ 		int getBitId() {
+ 			return bit_id;
+ 		}
+ 		int getCreateTime() {
+ 			return gen_time;
+ 		}
+ 		int getPktId() {
+ 			return pkt_id;
+ 		}
+ 		bool isEnd() {
+ 			return end;
+ 		}
+ };
 
-// class node {
-// 	private:
-// 		int id;
-// 		node* next;
-// //		deque<bit*> q;
-// 		queue<bit*> q;
-// 	public:
-// 		node() {}
-// 		node(int num) {
-// 			id = num;
-// 			next = NULL;
-// 		}
-// 		void setNext(node* n) { next = n; }
-// 		void GenPacket(int timeslot, int pkt_num, int pkt_length) {
-// 			bool end = false;
-// 			for(int i=0; i<pkt_length; i++) {
-// 				if(i == pkt_length - 1)
-// 					end = true;
-// 				bit* tp = new bit(i, timeslot, pkt_num, end);
-// //				q.push_back(tp);
-// 				q.push(tp);
-// 			}
-// 		}
-// 		bool isEmpty() {
-// 			return q.empty();	//return true if the queue is empty
-// 		}
-// 		bit* getFirst() {
-// 			return q.front();
-// 		}
-// 		bit* getLast() {
-// 			return q.back();
-// 		}
-// 		int getLength() {
-// 			return q.size();
-// 		}
-// 		void popBit() {
-// //			q.pop_front();
-// 			bit* tp = q.front();
-// 			q.pop();
-// 			delete tp;
-// 		}
-// 		void addBit(bit* tb) {
-// //			q.push_back(tb);
-// 			q.push(tb);
-// 		}
-// /*		bool isThereEnd() {
-// 			deque<bit*>::iterator it = q.begin();
-// 			while(it != q.end()) {
-// 				if((*it)->isEnd())
-// 					return true;
-// 				it++;
-// 			}
-// 			return false;
-// 		}*/
-// 		~node() {
-// 			delete next;
-// 		}
-// };
+ class node {
+ 	private:
+ 		int id;
+ 		node* next;
+ //		deque<bit*> q;
+ 		queue<bit*> q;
+ 	public:
+		int nPktCreated;
+		int nPktStored;
+		int nPktReceived;
 
-// void transmit(node* transmitter, node* receiver) {
-// 	if(!transmitter->isEmpty()) {
-// 		bit* tb = new bit(transmitter->getFirst());
-// 		transmitter->popBit();
-// 		receiver->addBit(tb);
-// 	}
-// }
+ 		node() {}
+ 		node(int num) {
+ 			id = num;
+ 			next = NULL;
+			nPktCreated = 0;
+			nPktStored = 0;
+			nPktReceived = 0;
+ 		}
+ 		void setNext(node* n) { next = n; }
+ 		void GenPacket(int timeslot, int pktSeq, int pkt_length) {
+			bit* tp;
+ 			for(int i=0; i<pkt_length; i++) {
+ 				if(i == pkt_length - 1)
+ 					tp = new bit(i, timeslot, pktSeq, true);
+				else 
+ 					tp = new bit(i, timeslot, pktSeq, false);
+ //				q.push_back(tp);
+ 				q.push(tp);
+ 			}
+			nPktCreated++;
+ 		}
+ 		bool isEmpty() {
+ 			return q.empty();	//return true if the queue is empty
+ 		}
+ 		bit* getFirst() {
+ 			return q.front();
+ 		}
+ 		bit* getLast() {
+ 			return q.back();
+ 		}
+ 		int getLength() {
+ 			return q.size();
+ 		}
+ 		//void popBit() {
+ 		bit* popBit() {
+ //			q.pop_front();
+ 			bit* tp = q.front();
+ 			q.pop();
+ 			//delete tp;
+			return tp;
+ 		}
+ 		void addBit(bit* tb) {
+ //			q.push_back(tb);
+			nPktReceived++;
+ 			q.push(tb);
+ 		}
+ /*		bool isThereEnd() {
+ 			deque<bit*>::iterator it = q.begin();
+ 			while(it != q.end()) {
+ 				if((*it)->isEnd())
+ 					return true;
+ 				it++;
+ 			}
+ 			return false;
+ 		}*/
+ 		~node() {
+ 			delete next;
+ 		}
+ };
 
-// int main(int argc, char* argv[]) {
-// 	//Linear Topology
-// 	node* NodeContainer[length];
-// 	for(int i=0; i<length; i++) {
-// 		node* tn = new node(i);
-// 		NodeContainer[i] = tn;
-// 	}
-// 	for(int i=0; i<length-1; i++) {
-// 		NodeContainer[i]->setNext(NodeContainer[i+1]);
-// 	}
+ void transmit(node* txNode, node* rxNode) {
+ 	if(!txNode->isEmpty()) {
+ 		//bit* tb = new bit(txNode->getFirst());
+ 		bit* tb = txNode->popBit();
+ 		rxNode->addBit(tb);
+ 	}
+ }
 
-// 	default_random_engine generator;
-// 	exponential_distribution<double> distribution(1.0/avg_pkt_length);
-// 	srand(time(NULL));
-// 	int timeslot = 0;
-// 	int max_timeslot = atoi(argv[1]);
-// 	int pkt_num = 0;
-// 	double arrival_rate = atof(argv[2]);
-// 	bool tc[length-1];
-// 	int en[length-1];
-// 	bool tr[length-1];
-// 	for(int i=0; i<length; i++) {
-// 		tc[i] = false;
-// 		en[i] = 0;
-// 		tr[i] = false;
-// 	}
-// 	while(timeslot < max_timeslot) {
-// //		cout << "Timeslot " << timeslot << " : \n";
-// 		long ran_num = (rand() % 10000) * 10000 + (rand() % 10000);
-// 		if(ran_num < arrival_rate * 100.0 / avg_pkt_length * 1000000.0) {
-// 			double temp = distribution(generator);
-// 			int pkt_length = int(temp);
-// 			while(pkt_length < 80) {	// minimal packet length
-// 				temp = distribution(generator);
-// 				pkt_length = int(temp);
-// 			}
-// 			NodeContainer[0]->GenPacket(timeslot, pkt_num, pkt_length);
-// 			pkt_num++;
-// 			en[0]++;
-// //			cout << "	Packet " << pkt_num-1 << " generated (" << pkt_length << ")\n";
-// 		}
-// 		for(int i=0; i<length-1; i++) {
-// 			if(!tc[i] && !(NodeContainer[i]->isEmpty())) {
-// 				if(en[i]>=1)
-// 					tc[i] = true;
-// 			}
-// 		}
-// 		for(int i=0; i<length-1; i++) {
-// 			if(tr[i]) {
-// 				transmit(NodeContainer[i], NodeContainer[i+1]);
-// 				tr[i] = false;
-// 				if(NodeContainer[i+1]->getLast()->isEnd()) {
-// 					tc[i] = false;
-// 					en[i]--;
-// 					if(i+1 < length-1)
-// 						en[i+1]++;
-// 				}
-// 			}
-// 			else if(tc[i]) {
-// 				tr[i] = true;
-// 			}
-// 		}
-// 		if(!(NodeContainer[length-1]->isEmpty())) {
-// 			bit* pb = NodeContainer[length-1]->getFirst();
-// 			if(pb->isEnd()) {
-// //				cout << "Packet " << pb->getPktId() << " : " << timeslot - pb->getTime() << endl;
-// //				cout << "	Pkt " << pb->getPktId() << " Transmitted : " << timeslot - pb->getTime() << endl;
-// 				cout << timeslot - pb->getTime() << endl;
-// 				tc[length-1] = false;
-// 			}
-// 			NodeContainer[length-1]->popBit();
-// //			cout << "		Popped\n";
-// 		}
-// //		cout << "	[ " << NodeContainer[0]->getLength() << " , " << NodeContainer[1]->getLength() << " , " << NodeContainer[2]->getLength() << " ]\n";
-// //		cout << "	[ " << tc[0] << " , " << tc[1] << " , " << tc[2] << " ]\n";
-// //		cout << "	length " << NodeContainer[length-1]->getLength() << endl; 
-// 		timeslot++;
-// 	}
-// }
+ int main(int argc, char* argv[]) {
+
+	 int i;
+
+	// Error handling 
+	if(argc != 4) {
+		printf("Error: \n"); 
+		printf("this_program <time slot> <arrival rate> <seed>\n");
+		printf("<time slot> = integer\n");
+		printf("<arrival ate> in pkts/FRAME -- double in [0,1)\n");
+		printf("<seed> is an integer\n");
+		exit(1);
+	}
+
+ 	int MAXTIMESLOT = atoi(argv[1]);
+ 	double ARRIVALRATE = atof(argv[2]);
+	int SEED = atoi(argv[3]);
+
+ 	//Linear Topology
+ 	node* NodeContainer[MAXNODE];
+ 	for(i=0; i<MAXNODE; i++)
+	{
+ 		NodeContainer[i] = new node(i);
+		if( i > 0 ) {
+			NodeContainer[i-1]->setNext( NodeContainer[i] );
+		}
+ 	}
+
+	// service rate = 1 pkt / (2*FRAME in slots)
+ 	default_random_engine generator;
+ 	exponential_distribution<double> dist(1.0/AVGPKTLENGTH);
+
+ 	//srand( time(NULL) );	<-- it is problematic.
+							// You cannot check your simulations,
+							// and thus, cannot control your simulations
+	srand( SEED );
+
+ 	bool tr[MAXNODE];	// to control TX timing
+ 	bool tc[MAXNODE];	// ready to TX
+ 	int en[MAXNODE];	// # of complete pkts 
+						// ==> it may be better to hold qlen (in pkts) within 'node' class
+
+ 	for(i=0; i<MAXNODE; i++) {
+ 		tc[i] = false;
+ 		tr[i] = false;
+ 		en[i] = 0;
+ 	}
+
+ 	int pktSeq = 0;	// pkt seq. no. 
+ 	int timeslot = 0;
+
+ 	int pkt_length;
+	double temp;
+	double avgDelay = 0.0;
+	double avgQueueLength = 0.0;
+
+ 	for( timeslot = 0; timeslot < MAXTIMESLOT; timeslot++ ) {
+ 		//cout << "Timeslot " << timeslot << " : \n";
+ 		//long ran_num = (rand() % 10000) * 10000 + (rand() % 10000);
+
+		//////////////////////////////////
+		// Generate traffic (packets)
+		//////////////////////////////////
+		// arrival rate = ARRIVALRATE pkts per FRAME
+		if( (1.0 * rand() / RAND_MAX) < (ARRIVALRATE / FRAME) ) { 
+ 		//if(ran_num < ARRIVALRATE * 100.0 / AVGPKTLENGTH * 1000000.0) {
+ 			pkt_length = 0;	// in number of slots
+ 			while(pkt_length <= MINPKTLENGTH) // minimal packet length
+			{
+ 				temp = dist(generator);
+ 				pkt_length = int(temp);
+ 			}
+ 			NodeContainer[0]->GenPacket(timeslot, pktSeq, pkt_length);
+ 			pktSeq++;
+ 			en[0]++;	// the packet is enqued at node 0
+			//cout << timeslot << ":	packet " << pktSeq-1  \
+					<< " generated (" << pkt_length << ")\n"; // debug
+ 		}
+
+		// mark the nodes who have complete packets in its queues
+		// this checking may not be necessary if 'node' holds the queue length.
+ 		for(i=0; i < MAXNODE-1; i++) {
+ 			if(!tc[i] && !(NodeContainer[i]->isEmpty())) {
+ 				if( en[i] >= 1 )
+ 					tc[i] = true;
+ 			}
+ 		}
+
+		//////////////////////////////////
+		// Transmit bits
+		//////////////////////////////////
+
+ 		for(i=0; i<MAXNODE-1; i++) {
+ 			//if(tr[i]) {
+			if( i == 0 && (timeslot % 2 == 0) ) // node 1 has a half capacity
+				continue;
+
+			if( tc[i] ) {	// node i has non-zero queue
+ 				if(NodeContainer[i]->getFirst()->isEnd()) {
+ 					tc[i] = false;
+ 					en[i]--;
+					en[i+1]++;
+				}
+ 				transmit(NodeContainer[i], NodeContainer[i+1]);
+ 			//	tr[i] = false;
+ 				//if(NodeContainer[i+1]->getLast()->isEnd()) {
+ 				//	tc[i] = false;
+ 				//	en[i]--;
+ 				//	if(i+1 < MAXNODE-1)
+ 				//		en[i+1]++;
+ 				//}
+			}
+ 			//}
+ 			//else if(tc[i]) {
+ 			//	tr[i] = true;
+ 			//}
+		}
+
+ 		if(!(NodeContainer[MAXNODE-1]->isEmpty())) {
+ 			bit* pb = NodeContainer[MAXNODE-1]->getFirst();
+ 			if(pb->isEnd()) {
+ 				//cout << "Arrived (" << pb->getPktId() << ") " \
+					<< timeslot - pb->getCreateTime() << endl; // debug
+ 				tc[MAXNODE-1] = false;
+
+				avgDelay = 0.99 * avgDelay + 0.01 * (timeslot - pb->getCreateTime()) / FRAME;
+ 			}
+ 			NodeContainer[MAXNODE-1]->popBit();
+ //			cout << "		Popped\n";
+ 		}
+
+		if( timeslot % FRAME == 0 )	{ // to avoid over-sampling
+			avgQueueLength = 0.99 * avgQueueLength + 0.01 * en[0];
+			//cout << timeslot << " -- " << en[0] << endl; // debug
+		}
+
+ //		cout << "	[ " << NodeContainer[0]->getLength() << " , " << NodeContainer[1]->getLength() << " , " << NodeContainer[2]->getLength() << " ]\n";
+ //		cout << "	[ " << tc[0] << " , " << tc[1] << " , " << tc[2] << " ]\n";
+ //		cout << "	length " << NodeContainer[length-1]->getLength() << endl; 
+ 	}
+
+
+	double rho = 1.0 * ARRIVALRATE / 0.5;	// mu = 0.5
+	/*
+	cout << endl;
+ 	cout << "Arrival	" << ARRIVALRATE << " ~ " 
+		<< (1.0 * NodeContainer[0]->nPktCreated / (1.0*MAXTIMESLOT/FRAME)) << endl; 
+	cout << "avgQLeng	" << avgQueueLength << endl;
+	cout << "avgDelay	" << avgDelay << endl;
+	cout << "rho = " << rho << endl;
+	cout << "E[Q] = " << rho / (1-rho) << endl;
+	cout << "E[D] = " << 1.0 / (0.5 - ARRIVALRATE) << endl;
+	*/
+ 	//cout << NodeContainer[0]->nPktCreated << " / " <<  MAXTIMESLOT << " * " << FRAME << endl; 
+	cout << ARRIVALRATE << "	" << (1.0 * NodeContainer[0]->nPktCreated / (1.0*MAXTIMESLOT/FRAME)) << "	" \
+		 << avgQueueLength << "	" << rho/(1-rho) << "	" \
+		 << avgDelay << "	" << 1.0 / (0.5 - ARRIVALRATE) << endl;
+ }
