@@ -6,7 +6,7 @@
 
  using namespace std;
 
- #define MAXNODE 2
+ #define MAXNODE 4
  //#define AVGPKTLENGTH 8000	// in slots
  #define AVGPKTLENGTH 1000	// in slots
  #define FRAME AVGPKTLENGTH
@@ -65,6 +65,8 @@
 			nPktReceived = 0;
  		}
  		void setNext(node* n) { next = n; }
+		node* getNext() { return next; }
+		int getID() { return id; }
  		void GenPacket(int timeslot, int pktSeq, int pkt_length) {
 			bit* tp;
  			for(int i=0; i<pkt_length; i++) {
@@ -147,10 +149,11 @@
  	for(i=0; i<MAXNODE; i++)
 	{
  		NodeContainer[i] = new node(i);
-		if( i > 0 ) {
+		if( i > 1 ) {
 			NodeContainer[i-1]->setNext( NodeContainer[i] );
 		}
  	}
+	NodeContainer[0]->setNext( NodeContainer[2] );
 
 	// service rate = 1 pkt / (2*FRAME in slots)
  	default_random_engine generator;
@@ -163,12 +166,14 @@
 
  	bool tr[MAXNODE];	// to control TX timing
  	bool tc[MAXNODE];	// ready to TX
+	bool transmitting[MAXNODE];	// to avoid mixed bits in intermediate node
  	int en[MAXNODE];	// # of complete pkts 
 						// ==> it may be better to hold qlen (in pkts) within 'node' class
 
  	for(i=0; i<MAXNODE; i++) {
  		tc[i] = false;
  		tr[i] = false;
+		transmitting[i] = false;
  		en[i] = 0;
  	}
 
@@ -181,14 +186,14 @@
 	double avgQueueLength = 0.0;
 
  	for( timeslot = 0; timeslot < MAXTIMESLOT; timeslot++ ) {
- 		//cout << "Timeslot " << timeslot << " : \n";
+// 		cout << "Timeslot " << timeslot << " : \n";
  		//long ran_num = (rand() % 10000) * 10000 + (rand() % 10000);
 
 		//////////////////////////////////
 		// Generate traffic (packets)
 		//////////////////////////////////
 		// arrival rate = ARRIVALRATE pkts per FRAME
-		if( (1.0 * rand() / RAND_MAX) < (ARRIVALRATE / FRAME) ) { 
+		if( (1.0 * rand() / RAND_MAX) < (ARRIVALRATE / 2.0 / FRAME) ) { 
  		//if(ran_num < ARRIVALRATE * 100.0 / AVGPKTLENGTH * 1000000.0) {
  			pkt_length = 0;	// in number of slots
  			while(pkt_length <= MINPKTLENGTH) // minimal packet length
@@ -199,7 +204,21 @@
  			NodeContainer[0]->GenPacket(timeslot, pktSeq, pkt_length);
  			pktSeq++;
  			en[0]++;	// the packet is enqued at node 0
-			//cout << timeslot << ":	packet " << pktSeq-1  \
+//			cout << timeslot << ":	packet " << pktSeq-1  \
+					<< " generated (" << pkt_length << ")\n"; // debug
+ 		}
+		if( (1.0 * rand() / RAND_MAX) < (ARRIVALRATE / 2.0 / FRAME) ) { 
+ 		//if(ran_num < ARRIVALRATE * 100.0 / AVGPKTLENGTH * 1000000.0) {
+ 			pkt_length = 0;	// in number of slots
+ 			while(pkt_length <= MINPKTLENGTH) // minimal packet length
+			{
+ 				temp = dist(generator);
+ 				pkt_length = int(temp);
+ 			}
+ 			NodeContainer[1]->GenPacket(timeslot, pktSeq, pkt_length);
+ 			pktSeq++;
+ 			en[1]++;	// the packet is enqued at node 0
+//			cout << timeslot << ":	packet " << pktSeq-1  \
 					<< " generated (" << pkt_length << ")\n"; // debug
  		}
 
@@ -212,22 +231,43 @@
  			}
  		}
 
+		if(tc[0] && tc[1] && !transmitting[0] && !transmitting[1]) {
+			if(rand() % 2 == 0) {
+				transmitting[0] = true;
+			} else {
+				transmitting[1] = true;
+			}
+		}
 		//////////////////////////////////
 		// Transmit bits
 		//////////////////////////////////
 
  		for(i=0; i<MAXNODE-1; i++) {
  			//if(tr[i]) {
-			if( i == 0 && (timeslot % 2 == 0) ) // node 1 has a half capacity
+			if( i != MAXNODE-1 && (timeslot % 2 == 0) ) // node 1 has a half capacity
 				continue;
 
 			if( tc[i] ) {	// node i has non-zero queue
- 				if(NodeContainer[i]->getFirst()->isEnd()) {
- 					tc[i] = false;
- 					en[i]--;
-					en[i+1]++;
+				if(i==0 || i==1) {
+					if((i==0 && transmitting[1] == false) || (i==1 && transmitting[0] == false)) {
+						transmitting[i] = true;
+		 				if(NodeContainer[i]->getFirst()->isEnd()) {
+		 					tc[i] = false;
+		 					en[i]--;
+							en[NodeContainer[i]->getNext()->getID()]++;
+							transmitting[i] = false;
+						}
+		 				transmit(NodeContainer[i], NodeContainer[i]->getNext());
+
+					}
+				} else {
+	 				if(NodeContainer[i]->getFirst()->isEnd()) {
+	 					tc[i] = false;
+	 					en[i]--;
+						en[NodeContainer[i]->getNext()->getID()]++;
+					}
+	 				transmit(NodeContainer[i], NodeContainer[i]->getNext());
 				}
- 				transmit(NodeContainer[i], NodeContainer[i+1]);
  			//	tr[i] = false;
  				//if(NodeContainer[i+1]->getLast()->isEnd()) {
  				//	tc[i] = false;
@@ -245,7 +285,7 @@
  		if(!(NodeContainer[MAXNODE-1]->isEmpty())) {
  			bit* pb = NodeContainer[MAXNODE-1]->getFirst();
  			if(pb->isEnd()) {
- 				//cout << "Arrived (" << pb->getPktId() << ") " \
+// 				cout << "Arrived (" << pb->getPktId() << ") " \
 					<< timeslot - pb->getCreateTime() << endl; // debug
  				tc[MAXNODE-1] = false;
 
@@ -256,18 +296,20 @@
  		}
 
 		if( timeslot % FRAME == 0 )	{ // to avoid over-sampling
-			avgQueueLength = 0.99 * avgQueueLength + 0.01 * en[0];
+			avgQueueLength = 0.99 * avgQueueLength + 0.01 * ((en[0] + en[1]) / 2.0);
 			//cout << timeslot << " -- " << en[0] << endl; // debug
 		}
 
  //		cout << "	[ " << NodeContainer[0]->getLength() << " , " << NodeContainer[1]->getLength() << " , " << NodeContainer[2]->getLength() << " ]\n";
- //		cout << "	[ " << tc[0] << " , " << tc[1] << " , " << tc[2] << " ]\n";
+ //		cout << "	[ " << en[0] << " , " << en[1] << " , " << en[2] << " ]\n";
+ //		cout << "	[ " << tc[0] << " , " << tc[1] << " , " << tc[2] << " , " << tc[3] << " ]\n";
+// 		cout << "	[ " << transmitting[0] << " , " << transmitting[1] << " ]\n";
  //		cout << "	length " << NodeContainer[length-1]->getLength() << endl; 
  	}
 
 
 	double rho = 1.0 * ARRIVALRATE / 0.5;	// mu = 0.5
-	/*
+/*	
 	cout << endl;
  	cout << "Arrival	" << ARRIVALRATE << " ~ " 
 		<< (1.0 * NodeContainer[0]->nPktCreated / (1.0*MAXTIMESLOT/FRAME)) << endl; 
@@ -276,9 +318,10 @@
 	cout << "rho = " << rho << endl;
 	cout << "E[Q] = " << rho / (1-rho) << endl;
 	cout << "E[D] = " << 1.0 / (0.5 - ARRIVALRATE) << endl;
-	*/
+*/	
  	//cout << NodeContainer[0]->nPktCreated << " / " <<  MAXTIMESLOT << " * " << FRAME << endl; 
-	cout << ARRIVALRATE << "	" << (1.0 * NodeContainer[0]->nPktCreated / (1.0*MAXTIMESLOT/FRAME)) << "	" \
-		 << avgQueueLength << "	" << rho/(1-rho) << "	" \
-		 << avgDelay << "	" << 1.0 / (0.5 - ARRIVALRATE) << endl;
+	cout << "Theoretical	Actual (rho = " << rho << ")\n";
+	cout << "Arrival rate : " << ARRIVALRATE << "	" << (1.0 * NodeContainer[0]->nPktCreated / (1.0*MAXTIMESLOT/FRAME)) << "	|	" \
+		 << "Avg Queue Length : " << rho/(1-rho) << "	" << avgQueueLength << "	|	" \
+		 << "Avg Delay : " << 2.0 / (0.5 - ARRIVALRATE) / 10000 << "	" << avgDelay / 10000 << endl;
  }
